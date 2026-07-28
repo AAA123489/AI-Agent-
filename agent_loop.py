@@ -1,6 +1,6 @@
 import json
 import asyncio
-from typing import Any, Dict, List, Optional
+from typing import Any, AsyncGenerator, Dict, List
 from dataclasses import dataclass, field
 
 from openai import AsyncOpenAI
@@ -14,6 +14,55 @@ from rich_display import (
     agent_error as rich_agent_error,
     set_enabled as rich_set_enabled,
 )
+
+
+# ═══════════════════════════════════════════════════════════════════
+# Agent 事件类型 —— 连接 Agent Loop 和表现层（SSE / Rich）
+# ═══════════════════════════════════════════════════════════════════
+
+@dataclass
+class ThinkingEvent:
+    """每轮推理开始时触发。"""
+    step: int
+    max_steps: int
+    tools: List[str]
+
+
+@dataclass
+class ToolCallEvent:
+    """Agent 决定调用某个工具。"""
+    tool: str
+    args: Dict[str, Any]
+
+
+@dataclass
+class ToolResultEvent:
+    """工具执行完毕（成功或失败）。"""
+    tool: str
+    success: bool
+    output: str
+
+
+@dataclass
+class TextEvent:
+    """Agent 最终回复文本。"""
+    content: str
+
+
+@dataclass
+class DoneEvent:
+    """任务正常完成。"""
+    pass
+
+
+@dataclass
+class ErrorEvent:
+    """发生错误（API 故障 / 超时 / 达到上限）。"""
+    message: str
+
+
+# 所有事件类型的联合（用于类型标注）
+AgentEvent = ThinkingEvent | ToolCallEvent | ToolResultEvent | TextEvent | DoneEvent | ErrorEvent
 
 
 @dataclass
@@ -30,6 +79,10 @@ class AgentLoop:
     """Agent 核心循环 —— 基于 OpenAI 兼容 SDK（DeepSeek 等）。
 
     流程：用户输入 → LLM 分析 → 调工具 / 给出答案 → 循环 → 返回结果
+
+    支持两种调用方式：
+    - run(): 返回最终文本（向后兼容 curl）
+    - run_stream(): async generator，yield 事件对象（SSE / Rich 消费）
     """
 
     llm_client: AsyncOpenAI
@@ -44,34 +97,61 @@ class AgentLoop:
         """初始化 Rich 显示开关。"""
         rich_set_enabled(self.use_rich)
 
+    # ── 公开 API ──────────────────────────────────────────────
+
     async def run(self, user_input: str) -> str:
-        """执行一次 Agent 对话，返回最终结果文本。"""
+        """执行一次 Agent 对话，返回最终结果文本。
+
+        向后兼容：curl / 旧代码仍然可以拿到 {"result": "..."} 一把梭响应。
+        内部调用 run_stream() 收集事件，同时驱动 Rich 终端显示。
+        """
+        final_text = ""
+        async for event in self.run_stream(user_input):
+            # 把事件流转成 Rich 终端输出（TTY 自动检测）
+            if isinstance(event, ThinkingEvent):
+                agent_thinking(event.step, event.max_steps, event.tools)
+            elif isinstance(event, ToolCallEvent):
+                rich_tool_call(event.tool, event.args)
+            elif isinstance(event, ToolResultEvent):
+                rich_tool_result(event.tool, event.success, event.output)
+            elif isinstance(event, TextEvent):
+                rich_agent_response(event.content)
+                final_text = event.content
+            elif isinstance(event, ErrorEvent):
+                rich_agent_error(event.message)
+        return final_text
+
+    async def run_stream(self, user_input: str) -> AsyncGenerator[AgentEvent, None]:
+        """SSE 流式版本 —— 逐事件 yield，供 SSE 端点或 Rich 消费者使用。"""
 
         # OpenAI 把 system prompt 作为一条消息放在对话最前面。
-        # 这样模型在一开始就能理解自己的角色和行为约束。
         messages: List[Dict[str, Any]] = [
             {"role": "system", "content": self.system_prompt},
             {"role": "user", "content": user_input},
         ]
 
         # 提取所有已注册工具的 schema（OpenAI function-calling 格式）。
-        # 如果没有工具，传 None 表示本轮不支持工具调用。
         tools_schema = [
             t["schema"] for t in self.tools.values()
         ] if self.tools else None
 
-        # ═══════════════════════════════════════════════
+        # ═══════════════════════════════════════════════════
         # Agent 主循环
-        # ═══════════════════════════════════════════════
+        # ═══════════════════════════════════════════════════
         for step in range(self.max_iterations):
             tool_names = (
                 [t["function"]["name"] for t in tools_schema]
                 if tools_schema else []
             )
-            agent_thinking(step + 1, self.max_iterations, tools=tool_names)
+
+            # → 事件: 本轮思考开始
+            yield ThinkingEvent(
+                step=step + 1,
+                max_steps=self.max_iterations,
+                tools=tool_names,
+            )
 
             # 向模型发起一次推理请求。
-            # 模型会依据当前对话上下文，决定是直接回答还是调用工具。
             create_kwargs = {
                 "model": self.model,
                 "max_tokens": self.max_tokens,
@@ -87,23 +167,24 @@ class AgentLoop:
                 else:
                     create_kwargs["tool_choice"] = "auto"
 
-            # LLM API 调用异常处理：网络断、限流、API 故障等
+            # LLM API 调用异常处理
             try:
                 response = await self.llm_client.chat.completions.create(**create_kwargs)
             except Exception as e:
-                rich_agent_error(f"LLM API 调用失败: {str(e)}")
-                return f"与模型通信时发生错误: {str(e)}"
+                yield ErrorEvent(message=f"LLM API 调用失败: {str(e)}")
+                return
 
             choice = response.choices[0]
             finish_reason = choice.finish_reason
 
-            # finish_reason == "stop" 表示模型认为任务已完成，直接回复文本。
+            # finish_reason == "stop" → 任务完成
             if finish_reason == "stop":
                 final_text = choice.message.content or ""
-                rich_agent_response(final_text)
-                return final_text
+                yield TextEvent(content=final_text)
+                yield DoneEvent()
+                return
 
-            # 如果模型请求调用工具，就执行工具并把结果回传。
+            # 模型请求调用工具
             if finish_reason == "tool_calls" or (
                 finish_reason != "stop" and choice.message.tool_calls
             ):
@@ -121,7 +202,8 @@ class AgentLoop:
                     except json.JSONDecodeError:
                         tool_args = {}
 
-                    rich_tool_call(tool_name, tool_args)
+                    # → 事件: 准备调工具
+                    yield ToolCallEvent(tool=tool_name, args=tool_args)
 
                     # 执行注册过的工具处理器（带超时保护）。
                     try:
@@ -135,7 +217,6 @@ class AgentLoop:
                             success=True,
                             output=str(output),
                         )
-                        rich_tool_result(tool_name, True, str(output))
                     except asyncio.TimeoutError:
                         result = ToolResult(
                             tool_name=tool_name,
@@ -145,7 +226,6 @@ class AgentLoop:
                                 f"（{config.TOOL_TIMEOUT}秒），已取消。"
                             ),
                         )
-                        rich_tool_result(tool_name, False, result.output)
                     except KeyError:
                         result = ToolResult(
                             tool_name=tool_name,
@@ -155,14 +235,19 @@ class AgentLoop:
                                 f"可用工具：{list(self.tools.keys())}"
                             ),
                         )
-                        rich_tool_result(tool_name, False, result.output)
                     except Exception as e:
                         result = ToolResult(
                             tool_name=tool_name,
                             success=False,
                             output=f"工具 '{tool_name}' 执行错误：{str(e)}",
                         )
-                        rich_tool_result(tool_name, False, result.output)
+
+                    # → 事件: 工具结果
+                    yield ToolResultEvent(
+                        tool=tool_name,
+                        success=result.success,
+                        output=result.output,
+                    )
 
                     # 把工具结果组织成 OpenAI 的 tool 消息格式。
                     tool_result_messages.append({
@@ -172,18 +257,16 @@ class AgentLoop:
                     })
 
                 # 将所有工具执行结果追加到消息历史。
-                # 下一轮模型会看到"刚才工具执行了什么，返回了什么结果"。
                 messages.extend(tool_result_messages)
                 continue
 
             # 兜底：遇到意外的 finish_reason（如 length 截断）。
-            rich_agent_error(
-                f"意外 finish_reason: {finish_reason} (step {step + 1})"
+            yield ErrorEvent(
+                message=f"意外 finish_reason: {finish_reason} (step {step + 1})"
             )
-            return choice.message.content or ""
+            return
 
-        # 达到最大循环次数仍未结束，可能是任务太复杂或模型陷入循环。
-        rich_agent_error(
-            f"达到最大循环次数（{self.max_iterations}轮），任务未能完成。"
+        # 达到最大循环次数仍未结束。
+        yield ErrorEvent(
+            message=f"达到最大循环次数（{self.max_iterations}轮），任务未能完成。"
         )
-        return f"⚠️ 达到最大循环次数（{self.max_iterations}轮），任务未能完成。"

@@ -27,6 +27,7 @@ Thumbs.db
 htmlcov/
 .coverage
 
-# Agent 运行时生成文件
+# Agent 运行时生成文件（测试产物，不提交）
 time.txt
+current-time.txt
 *.md.tmp

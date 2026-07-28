@@ -2,13 +2,18 @@
 
 这个文件是整个 AI Agent 工作流引擎对外暴露的 HTTP 服务入口。
 它负责创建 FastAPI 应用实例、配置跨域访问、提供健康检查接口，
-并为后续接入前端页面或其他 Web 交互留出扩展点。
+以及 Agent 推理的 SSE 流式端点。
 """
 
-from fastapi import FastAPI
+import json
+import re
+import sys
+from dataclasses import fields
+
+from fastapi import FastAPI, HTTPException
+from fastapi.responses import StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
-import sys
 
 from openai import AsyncOpenAI
 
@@ -50,17 +55,21 @@ def health():
 
 @app.post("/agent")
 async def run_agent(payload: dict):
-    """接收用户自然语言消息，交给 Agent Loop 执行，返回结果。
+    """Agent 推理端点 —— SSE 流式输出事件。
 
     请求体格式：{"message": "现在几点了？"}
-    响应格式：{"result": "当前时间是 2026-07-27 20:30:00"}
+    响应格式：text/event-stream（SSE），逐事件推送
+
+    事件类型：thinking / tool_call / tool_result / text / done / error
+
+    也兼容旧版 JSON 一把梭模式：请求头 Accept: application/json 时
+    改为返回 {"result": "..."}（向后兼容 curl 测试）。
     """
     user_message = payload.get("message", "")
     if not user_message:
-        return {"error": "message 字段不能为空"}
+        raise HTTPException(status_code=400, detail="message 字段不能为空")
 
     # 初始化 OpenAI 兼容客户端（DeepSeek）。
-    # base_url 指向 DeepSeek API，换成其他 OpenAI 兼容服务一样能用。
     client = AsyncOpenAI(
         api_key=config.ANTHROPIC_API_KEY,
         base_url=config.LLM_BASE_URL,
@@ -115,15 +124,46 @@ async def run_agent(payload: dict):
             "8. 拿到工具结果后，用自然语言总结给用户"
         ),
         tools=tools,
-        use_rich=sys.stdout.isatty(),  # 终端运行→Rich 美化; curl→纯 print
+        use_rich=False,  # HTTP 模式关闭 Rich，走 SSE
     )
-    result = await agent.run(user_message)
-    return {"result": result}
+
+    async def event_stream():
+        """SSE 事件生成器：把 Agent 事件转为 data: {json}\n\n 格式。"""
+        try:
+            async for event in agent.run_stream(user_message):
+                # 事件对象 → {"type": "thinking", "step": 1, ...}
+                # 例: ThinkingEvent → "thinking", ToolCallEvent → "tool_call"
+                raw_name = event.__class__.__name__.replace("Event", "")
+                event_type = re.sub(r'(?<!^)(?=[A-Z])', '_', raw_name).lower()
+                data: dict = {"type": event_type}
+                for f in fields(event):
+                    data[f.name] = getattr(event, f.name)
+                yield f"data: {json.dumps(data, ensure_ascii=False)}\n\n"
+
+            # 正常结束标记
+            yield "data: [DONE]\n\n"
+
+        except Exception as e:
+            error_data = json.dumps(
+                {"type": "error", "message": str(e)},
+                ensure_ascii=False,
+            )
+            yield f"data: {error_data}\n\n"
+
+    return StreamingResponse(
+        event_stream(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
 
 
-# 第 5 天挂载前端时，可以启用下面这行代码：
-# app.mount("/", StaticFiles(directory="static", html=True))
-# 这意味着前端静态资源会直接由 FastAPI 提供服务。
+# 挂载前端静态文件。
+# 注意：必须放在所有 API 路由之后，否则会吞掉 /agent 和 /health。
+app.mount("/", StaticFiles(directory="static", html=True))
 
 
 if __name__ == "__main__":
