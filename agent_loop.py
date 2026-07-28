@@ -1,10 +1,19 @@
 import json
-from typing import Any, Dict, List
+import asyncio
+from typing import Any, Dict, List, Optional
 from dataclasses import dataclass, field
 
 from openai import AsyncOpenAI
 
 from config import config
+from rich_display import (
+    agent_thinking,
+    tool_call as rich_tool_call,
+    tool_result as rich_tool_result,
+    agent_response as rich_agent_response,
+    agent_error as rich_agent_error,
+    set_enabled as rich_set_enabled,
+)
 
 
 @dataclass
@@ -29,6 +38,11 @@ class AgentLoop:
     max_iterations: int = 10
     model: str = config.MODEL
     max_tokens: int = config.MAX_TOKENS
+    use_rich: bool = True  # True = 终端 Rich 输出，False = 纯 print
+
+    def __post_init__(self):
+        """初始化 Rich 显示开关。"""
+        rich_set_enabled(self.use_rich)
 
     async def run(self, user_input: str) -> str:
         """执行一次 Agent 对话，返回最终结果文本。"""
@@ -50,10 +64,11 @@ class AgentLoop:
         # Agent 主循环
         # ═══════════════════════════════════════════════
         for step in range(self.max_iterations):
-            print(f"\n{'=' * 50}")
-            print(f"[Step {step + 1}/{self.max_iterations}] LLM 思考中...")
-            if tools_schema:
-                print(f"  可用工具: {[t['function']['name'] for t in tools_schema]}")
+            tool_names = (
+                [t["function"]["name"] for t in tools_schema]
+                if tools_schema else []
+            )
+            agent_thinking(step + 1, self.max_iterations, tools=tool_names)
 
             # 向模型发起一次推理请求。
             # 模型会依据当前对话上下文，决定是直接回答还是调用工具。
@@ -72,7 +87,12 @@ class AgentLoop:
                 else:
                     create_kwargs["tool_choice"] = "auto"
 
-            response = await self.llm_client.chat.completions.create(**create_kwargs)
+            # LLM API 调用异常处理：网络断、限流、API 故障等
+            try:
+                response = await self.llm_client.chat.completions.create(**create_kwargs)
+            except Exception as e:
+                rich_agent_error(f"LLM API 调用失败: {str(e)}")
+                return f"与模型通信时发生错误: {str(e)}"
 
             choice = response.choices[0]
             finish_reason = choice.finish_reason
@@ -80,7 +100,7 @@ class AgentLoop:
             # finish_reason == "stop" 表示模型认为任务已完成，直接回复文本。
             if finish_reason == "stop":
                 final_text = choice.message.content or ""
-                print(f"[Step {step + 1}] ✅ 任务完成")
+                rich_agent_response(final_text)
                 return final_text
 
             # 如果模型请求调用工具，就执行工具并把结果回传。
@@ -101,32 +121,48 @@ class AgentLoop:
                     except json.JSONDecodeError:
                         tool_args = {}
 
-                    print(f"  🔧 调用工具: {tool_name}({tool_args})")
+                    rich_tool_call(tool_name, tool_args)
 
-                    # 执行注册过的工具处理器。
+                    # 执行注册过的工具处理器（带超时保护）。
                     try:
                         handler = self.tools[tool_name]["handler"]
-                        output = await handler(**tool_args)
+                        output = await asyncio.wait_for(
+                            handler(**tool_args),
+                            timeout=config.TOOL_TIMEOUT,
+                        )
                         result = ToolResult(
                             tool_name=tool_name,
                             success=True,
                             output=str(output),
                         )
-                        print(f"  ✅ 工具返回: {output}")
+                        rich_tool_result(tool_name, True, str(output))
+                    except asyncio.TimeoutError:
+                        result = ToolResult(
+                            tool_name=tool_name,
+                            success=False,
+                            output=(
+                                f"工具 '{tool_name}' 执行超时"
+                                f"（{config.TOOL_TIMEOUT}秒），已取消。"
+                            ),
+                        )
+                        rich_tool_result(tool_name, False, result.output)
                     except KeyError:
                         result = ToolResult(
                             tool_name=tool_name,
                             success=False,
-                            output=f"工具 '{tool_name}' 不存在。可用工具：{list(self.tools.keys())}",
+                            output=(
+                                f"工具 '{tool_name}' 不存在。"
+                                f"可用工具：{list(self.tools.keys())}"
+                            ),
                         )
-                        print(f"  ❌ {result.output}")
+                        rich_tool_result(tool_name, False, result.output)
                     except Exception as e:
                         result = ToolResult(
                             tool_name=tool_name,
                             success=False,
-                            output=f"执行错误：{str(e)}",
+                            output=f"工具 '{tool_name}' 执行错误：{str(e)}",
                         )
-                        print(f"  ❌ {result.output}")
+                        rich_tool_result(tool_name, False, result.output)
 
                     # 把工具结果组织成 OpenAI 的 tool 消息格式。
                     tool_result_messages.append({
@@ -141,8 +177,13 @@ class AgentLoop:
                 continue
 
             # 兜底：遇到意外的 finish_reason（如 length 截断）。
-            print(f"[Step {step + 1}] ⚠️ 意外 finish_reason: {finish_reason}")
+            rich_agent_error(
+                f"意外 finish_reason: {finish_reason} (step {step + 1})"
+            )
             return choice.message.content or ""
 
         # 达到最大循环次数仍未结束，可能是任务太复杂或模型陷入循环。
+        rich_agent_error(
+            f"达到最大循环次数（{self.max_iterations}轮），任务未能完成。"
+        )
         return f"⚠️ 达到最大循环次数（{self.max_iterations}轮），任务未能完成。"

@@ -32,15 +32,15 @@ class Config:
 
     # 单次模型生成允许使用的最大 token 数。
     # 数值越大，回答越丰富，但也会带来更高的成本和延迟。
-    MAX_TOKENS: int = 4096
+    MAX_TOKENS: int = int(os.getenv("MAX_TOKENS", "4096"))
 
     # Agent 循环允许执行的最大轮数。
     # 用于防止模型不断调用工具或陷入重复推理导致资源浪费。
-    MAX_ITERATIONS: int = 10
+    MAX_ITERATIONS: int = int(os.getenv("MAX_ITERATIONS", "10"))
 
     # 工具执行超时时间，单位为秒。
-    # 如果某个工具长时间未返回，后续可以把它视为失败并由 Agent 处理。
-    TOOL_TIMEOUT: int = 30  # 秒
+    # 如果某个工具长时间未返回，会被视为失败并由 Agent 处理。
+    TOOL_TIMEOUT: int = int(os.getenv("TOOL_TIMEOUT", "30"))
 
 
 # 创建一个全局配置实例，方便整个项目中任何模块直接引用。

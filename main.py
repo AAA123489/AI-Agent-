@@ -8,14 +8,20 @@
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
+import sys
 
 from openai import AsyncOpenAI
 
 from config import config
 from agent_loop import AgentLoop
 from tools.get_time import get_current_time, TOOL_SCHEMA
-from tools.file_tools import write_file, WRITE_FILE_SCHEMA
+from tools.file_tools import (
+    write_file, WRITE_FILE_SCHEMA,
+    read_file, READ_FILE_SCHEMA,
+    list_files, LIST_FILES_SCHEMA,
+)
 from tools.rag_search import rag_search, RAG_SEARCH_SCHEMA
+from tools.web_search import web_search, WEB_SEARCH_SCHEMA
 
 # 创建 FastAPI 应用实例。后续所有路由、插件和中间件都会挂载到这个对象上。
 app = FastAPI(title="AI Agent Workflow Engine", version="0.1.0")
@@ -70,9 +76,21 @@ async def run_agent(payload: dict):
             "handler": write_file,
             "schema": WRITE_FILE_SCHEMA,
         },
+        "read_file": {
+            "handler": read_file,
+            "schema": READ_FILE_SCHEMA,
+        },
+        "list_files": {
+            "handler": list_files,
+            "schema": LIST_FILES_SCHEMA,
+        },
         "rag_search": {
             "handler": rag_search,
             "schema": RAG_SEARCH_SCHEMA,
+        },
+        "web_search": {
+            "handler": web_search,
+            "schema": WEB_SEARCH_SCHEMA,
         },
     }
 
@@ -83,11 +101,15 @@ async def run_agent(payload: dict):
             "工具使用规则：\n"
             "1. 用户问时间/日期 → 必须用 get_current_time，不能凭记忆回答\n"
             "2. 用户要保存内容到文件 → 用 write_file\n"
-            "3. 用户问知识库里的内容、文档资料、某个主题 → 先用 rag_search 搜索\n"
-            "4. 有工具就优先用工具，不要编造信息\n"
-            "5. 拿到工具结果后，用自然语言总结给用户"
+            "3. 用户要读取文件内容 → 用 read_file\n"
+            "4. 用户要查看目录结构/有哪些文件 → 用 list_files\n"
+            "5. 用户问知识库里的内容、文档资料、某个主题 → 先用 rag_search 搜索\n"
+            "6. 用户问最新信息、实时数据、或知识库中没有的内容 → 用 web_search\n"
+            "7. 有工具就优先用工具，不要编造信息\n"
+            "8. 拿到工具结果后，用自然语言总结给用户"
         ),
         tools=tools,
+        use_rich=sys.stdout.isatty(),  # 终端运行→Rich 美化; curl→纯 print
     )
     result = await agent.run(user_message)
     return {"result": result}

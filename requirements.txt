@@ -1,0 +1,33 @@
+# ============================================================
+# AI 工作流 Agent 引擎 —— Python 依赖
+# ============================================================
+# 安装方式: pip install -r requirements.txt
+
+# LLM Client (OpenAI 兼容 SDK，支持 DeepSeek / 千问 / 智谱等)
+openai>=2.0.0,<3.0.0
+
+# Web Framework
+fastapi>=0.140.0,<1.0.0
+uvicorn>=0.30.0,<1.0.0
+
+# Environment Variables
+python-dotenv>=1.0.0,<2.0.0
+
+# Vector Database (RAG 知识库检索)
+chromadb>=1.5.0,<2.0.0
+
+# Embedding Model (RAG 工具依赖)
+sentence-transformers>=5.0.0,<6.0.0
+
+# Rich Terminal Output (Agent 思考可视化)
+rich>=15.0.0,<16.0.0
+
+# Web Search (DuckDuckGo 免费搜索，无需 API Key)
+ddgs>=9.0.0,<11.0.0
+
+# HTTP Client (异步网络请求)
+aiohttp>=3.0.0,<4.0.0
+
+# Testing
+pytest>=9.0.0,<10.0.0
+pytest-asyncio>=1.0.0,<2.0.0
