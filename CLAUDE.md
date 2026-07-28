@@ -31,9 +31,10 @@
 | `tools/file_tools.py` | write_file / read_file / list_files 工具（3合1） | ✅ |
 | `tools/rag_search.py` | 第 3 天 RAG 知识库检索，对接项目一 Chroma 向量库 | ✅ |
 | `tools/web_search.py` | 第 4 天 DuckDuckGo 免费网页搜索 | ✅ |
+| `tools/weather.py` | 高德天气 API（实时 + 预报） | ✅ |
 | `rich_display.py` | 第 4 天 Rich 终端美化（TTY 自动检测降级） | ✅ |
 | `requirements.txt` | 第 4 天 项目完整依赖清单 | ✅ |
-| `main.py` | `GET /health` + `POST /agent`，注册 6 个工具 | ✅ |
+| `main.py` | `GET /health` + `POST /agent`，注册 7 个工具 | ✅ |
 | `config.py` | 从 `.env` 加载配置，支持 OpenAI 兼容服务（DeepSeek 等） | ✅ |
 | `prompts.py` | 系统 Prompt 模板（含 6 工具使用指引） | ✅ |
 
@@ -160,7 +161,7 @@ for step in range(max_iterations):
 
 ---
 
-## 当前已注册的工具（6个）
+## 当前已注册的工具（7个）
 
 | 工具名 | 文件 | 功能 | 参数 |
 |--------|------|------|------|
@@ -170,6 +171,7 @@ for step in range(max_iterations):
 | `list_files` | `tools/file_tools.py` | 列出目录内容 | `directory`(可选) |
 | `rag_search` | `tools/rag_search.py` | 搜项目一知识库 | `query`, `top_k`(可选) |
 | `web_search` | `tools/web_search.py` | DuckDuckGo 网页搜索 | `query`, `max_results`(可选) |
+| `get_weather` | `tools/weather.py` | 高德天气（实时+预报） | `city` |
 
 ---
 
@@ -284,27 +286,20 @@ TOOL_TIMEOUT=30
 
 ## 下一步做什么
 
-1. **🔴 当前任务**：写 `tools/weather.py` —— 天气查询工具，用免费 API `wttr.in`（不需要 API Key）
-2. **第 5 天**：SSE 流式改造、`static/agent.html` 前端
-3. **第 6 天**：pytest 测试、README
-4. **第 7 天**：演示视频、简历描述
+1. **第 5 天**：SSE 流式改造、`static/agent.html` 前端
+2. **第 6 天**：pytest 测试、README
+3. **第 7 天**：演示视频、简历描述
 
 ---
 
 ## 当前会话上下文（2026-07-28）
 
-### 用户学习状态
-- 用户处于学习阶段，已逐行理解第 4 天所有代码
-- 理解核心概念：`isatty()` 检测、`asyncio.to_thread` 包裹同步代码、异常捕获顺序
-- 下一步计划：用户自己写 `tools/weather.py`，Claude review
+### 天气工具已完成（7个工具）
+- 用户写了 `tools/weather.py` 初稿，Claude review + 修复
+- **API**：从 wttr.in 改成了**高德天气 API**（国内访问快、免费 5000次/天）
+- **功能**：实时天气 + 明天预报，一个请求同时返回
+- **关键踩坑**：`extensions=all` 不返回 `lives`，只返回 `forecasts`；`casts[0]` 是今天、`casts[1]` 是明天
+- **已注册到 main.py**（import + tools dict + system prompt）
 
-### 天气工具规格（待实现）
-- **API**：`wttr.in`，免费无需注册，URL 格式 `https://wttr.in/{city}?format=j1`
-- **函数签名**：`async def get_weather(city: str) -> str`
-- **HTTP 库**：用 `aiohttp`（项目已安装）
-- **Schema**：`GET_WEATHER_SCHEMA`，参数 `city`（必填）
-- **注册**：在 `main.py` 的 tools dict 中加入
-- **参考模板**：`tools/web_search.py`（结构最接近——都是 HTTP 请求 + JSON 解析）
-
-### 工具总数：6 → 目标 7
-当前 6 个：get_current_time, write_file, read_file, list_files, rag_search, web_search
+### 当前 7 个工具
+get_current_time, write_file, read_file, list_files, rag_search, web_search, get_weather

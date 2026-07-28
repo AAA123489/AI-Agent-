@@ -22,6 +22,7 @@ from tools.file_tools import (
 )
 from tools.rag_search import rag_search, RAG_SEARCH_SCHEMA
 from tools.web_search import web_search, WEB_SEARCH_SCHEMA
+from tools.weather import get_weather, GET_WEATHER_SCHEMA
 
 # 创建 FastAPI 应用实例。后续所有路由、插件和中间件都会挂载到这个对象上。
 app = FastAPI(title="AI Agent Workflow Engine", version="0.1.0")
@@ -92,6 +93,10 @@ async def run_agent(payload: dict):
             "handler": web_search,
             "schema": WEB_SEARCH_SCHEMA,
         },
+        "get_weather": {
+            "handler": get_weather,
+            "schema": GET_WEATHER_SCHEMA,
+        },
     }
 
     agent = AgentLoop(
@@ -105,7 +110,8 @@ async def run_agent(payload: dict):
             "4. 用户要查看目录结构/有哪些文件 → 用 list_files\n"
             "5. 用户问知识库里的内容、文档资料、某个主题 → 先用 rag_search 搜索\n"
             "6. 用户问最新信息、实时数据、或知识库中没有的内容 → 用 web_search\n"
-            "7. 有工具就优先用工具，不要编造信息\n"
+            "7. 用户问天气 → 用 get_weather\n"
+            "8. 有工具就优先用工具，不要编造信息\n"
             "8. 拿到工具结果后，用自然语言总结给用户"
         ),
         tools=tools,
