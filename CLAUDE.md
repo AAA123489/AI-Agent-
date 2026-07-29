@@ -37,8 +37,11 @@
 | `main.py` | `GET /health` + `POST /agent`（SSE 流式），注册 7 个工具 + 挂载静态文件 | ✅ |
 | `config.py` | 从 `.env` 加载配置，支持 OpenAI 兼容服务（DeepSeek 等） | ✅ |
 | `prompts.py` | 系统 Prompt 模板（含 7 工具使用指引） | ✅ |
-| `static/agent.html` | 第 5 天 Agent 思考可视化前端（SSE 消费 + Round 卡片） | ✅ |
+| `static/agent.html` | 第 5 天 Agent 思考可视化前端（SSE 消费 + Round 卡片）→ 第 6 天重构为侧栏+蓝灰+时间线 | ✅ |
 | `static/index.html` | 入口跳转页 → `/agent.html` | ✅ |
+| **pytest 测试** | 22 条测试（11 agent_loop + 8 tools + 3 config），全部通过 | ✅ |
+| **README.md** | 完整项目文档：架构图、快速开始、API 文档、工具扩展指南 | ✅ |
+| **前端重构** | 侧栏工具导航 + 蓝灰主色调 + 时间线步骤 + 工具快捷标签 | ✅ |
 
 ### 🔲 待完成
 
@@ -49,7 +52,7 @@
 | 第 3 天 | 接入项目一 RAG 知识库（rag_search） | ✅ |
 | 第 4 天 | 更多工具（Web Search + File）+ 容错 + Rich 输出 | ✅ |
 | 第 5 天 | 前端 SSE 流式 + Agent 思考可视化 | ✅ |
-| 第 6 天 | pytest + README + **前端重新设计** | 🔲 |
+| 第 6 天 | pytest + README + **前端重新设计** | ✅ |
 | 第 7 天 | 演示视频 + 简历描述 + 面试准备 | 🔲 |
 
 ---
@@ -124,6 +127,12 @@ tools = {
 | `tools/weather.py` | 高德天气 API（实时 + 预报） | ✅ |
 | `tools/__init__.py` | 工具模块入口 | 空 |
 | `tests/__init__.py` | 测试模块入口 | 空 |
+| `tests/conftest.py` | 共享 fixture + mock 辅助函数 | ✅ 第 6 天 |
+| `tests/test_agent_loop.py` | Agent Loop 核心测试（11 条） | ✅ 第 6 天 |
+| `tests/test_tools.py` | 工具独立测试（8 条） | ✅ 第 6 天 |
+| `tests/test_config.py` | 配置测试（3 条） | ✅ 第 6 天 |
+| `pytest.ini` | pytest 配置（asyncio_mode=auto） | ✅ 第 6 天 |
+| `README.md` | 项目文档（架构+快速开始+API+扩展指南） | ✅ 第 6 天 |
 | `.env` | API Key + 配置（Git 忽略） | 已配 DeepSeek |
 | `.env.example` | 配置模板（提交 Git） | ✅ |
 | `.gitignore` | 忽略 .venv、.env、__pycache__、测试产物 | ✅ |
@@ -386,24 +395,249 @@ TOOL_TIMEOUT=30
 
 ## 下一步做什么
 
-1. **第 6 天**：pytest 测试 + README + **前端重新设计**（左侧工具栏 + 蓝灰配色 + 时间线步骤）
-2. **第 7 天**：演示视频、简历描述
+1. ~~**第 6 天**：pytest 测试 + README + 前端重新设计~~ ✅ 已完成
+2. **第 7 天**：演示视频（录制 2-3 个场景）+ 简历描述（已写好两版）+ 面试准备（已写好 7 道常见问答）
 
 ---
 
-## 当前会话上下文（2026-07-28）
+## 第 6 天新增内容（2026-07-29）
 
-### 第 5 天完成
-- `agent_loop.py`：新增 6 种事件 dataclass + `run_stream()` async generator + `run()` 改为事件消费驱动 Rich
-- `main.py`：`POST /agent` → SSE `StreamingResponse` + 挂载 `static/`
-- `static/agent.html`：~320 行前端，暗色主题 + SSE 消费 + Round 卡片 + 工具调用可视化
-- `static/index.html`：入口跳转 → agent.html
-- `.gitignore`：新增 `current-time.txt`
+### pytest 测试（22 条，全部通过）
 
-### 第 6 天前端重设计划（调研完成）
-- 调研了 DeepSeek、豆包、千问的 UI 设计
-- 核心方向：左侧工具栏 + 蓝灰主色调 + 时间线步骤 + 输入框工具快捷提示
-- 目标：跟项目一的 chat.html 拉开视觉差距，更像专业 Agent 工作台
+```
+tests/
+├── conftest.py            # 共享 fixture: mock_llm_client, echo_tool, agent_loop_factory
+│                          # mock 辅助: make_text_response(), make_tool_calls_response()
+├── test_agent_loop.py     # 11 条: 单/多工具调用, 直接文本, API 错误, 超时,
+│                          #         未知工具, 工具异常, JSON 解析回退, 空输入, 上限
+├── test_tools.py          # 8 条: 时间格式, 文件读写, 目录列表, 搜索/天气(Skip on fail)
+└── test_config.py         # 3 条: 默认值, API Key 类型, 数值类型
+```
+
+运行: `pytest tests/ -v`
+
+### 前端重构（`static/agent.html`）
+
+**布局**: 左侧 240px 工具栏 + 主对话区域（CSS Grid→Flexbox 两栏）
+**配色**: 红黑 `#e94560` → 蓝灰 `#4f8cff`（更接近专业工具风格）
+**Sidebar**: 导航区 + 7 个工具列表（带绿色状态灯）
+**Agent 思考**: Round 折叠卡片 → 垂直时间线（时间线节点 + 竖线连接）
+**输入框**: 新增 7 个工具快捷标签，点击插入工具名到输入框
+**响应式**: <700px 隐藏侧栏
+
+### README.md
+
+包含: 架构 ASCII 图, 快速开始, API 文档, SSE 事件协议表, 7 工具表格, 添加新工具指南,
+项目结构, 技术栈, 与项目一的对比
+
+### 踩坑记录
+
+- **test_agent_loop import**: `from conftest import ...` 在 pytest 里需要写成 `from tests.conftest import ...`
+- **weather test**: 高德 API `city="Beijing"` 返回空字符串，必须用中文 `city="北京"`
+- **MagicMock model_dump()**: `make_tool_calls_response` 必须显式设置 `choice.message.model_dump.return_value`，否则 Agent Loop 的 `messages.append(choice.message.model_dump())` 拿不到数据
+
+---
+
+## 当前会话上下文（2026-07-29）
+
+### 第 6 天完成
+- **测试**: 22 条 pytest（tests/conftest.py + test_agent_loop.py + test_tools.py + test_config.py），全部通过
+- **README**: 完整项目文档（架构图 + 快速开始 + API + 工具扩展指南）
+- **前端重构**: 侧栏工具导航 + 蓝灰 `#4f8cff` 主色调 + 时间线步骤 + 7 个工具快捷标签 + 响应式
+- **CLAUDE.md**: 更新开发进度 + 文件清单 + 踩坑记录
 
 ### 当前 7 个工具
 get_current_time, write_file, read_file, list_files, rag_search, web_search, get_weather
+
+---
+
+## 第 7 天：简历描述 + 面试准备 + 演示视频
+
+### 一、简历项目描述（可直接用）
+
+#### 版本 A：单项目版（项目二独立描述）
+
+```
+项目名称：AI 工作流 Agent 引擎 —— 自然语言驱动的多工具编排系统
+时间：2026.07-2026.08 | 独立开发
+技术栈：Python / FastAPI / OpenAI SDK / SSE / ChromaDB / DuckDuckGo
+
+项目描述：
+基于大语言模型自研的智能体引擎。不依赖 LangChain/CrewAI 等框架，基于 OpenAI
+SDK 裸写 Agent 核心循环，让 Agent 能自主理解自然语言任务、制定执行计划、调度
+多种工具完成复杂工作流。
+
+核心工作：
+- 自研 Agent Loop：Observe→Plan→Act 循环，手动实现 tool calling、消息历史
+  管理、异常容错、最大轮次保护
+- 可插拔工具系统（7 个工具）：时间查询、本地文件读写、目录浏览、RAG 知识库
+  检索、DuckDuckGo 网页搜索、高德天气 API
+- 跨项目知识库共享：复用项目一 ChromaDB 向量库，将 RAG 检索作为 Agent 工具
+- SSE 流式可视化：自研 6 种事件类型（thinking/tool_call/tool_result/text/
+  done/error），前端时间线实时展示 Agent 完整思考链路
+- 容错机制：工具超时重试、未知工具回退、非法 JSON 参数兜底、最大轮次保护
+
+项目成果：
+- 22 条 pytest 测试，全部通过
+- 完整项目文档（README + CLAUDE.md）
+- 前端：左侧工具栏 + 蓝灰配色 + 时间线可视化 + 7 个工具快捷标签
+```
+
+#### 版本 B：两个项目串联版（推荐，放简历项目经历栏）
+
+```
+项目经历
+
+项目一：RAG 知识库智能问答系统 | 2026.07 | 独立开发
+技术栈：Python / FastAPI / ChromaDB / sentence-transformers / SSE / MCP
+
+- 从零构建 RAG 完整管道：文档解析→文本分块→向量化入库→语义检索→LLM 生成
+- 53 条技术文档入库，ChromaDB 持久化存储，embedding 模型 paraphrase-multilingual-MiniLM-L12-v2
+- 使用 MCP 协议将 RAG 检索封装为标准化工具，可被任何 MCP 客户端调用
+- SSE 流式前端 Chat UI，展示来源引用和相关度评分
+
+项目二：AI 工作流 Agent 引擎 | 2026.08 | 独立开发
+技术栈：Python / FastAPI / OpenAI SDK / SSE / ChromaDB / DuckDuckGo
+
+- 自研 Agent Loop 核心循环，不依赖 LangChain/CrewAI，理解每一步原理
+- 7 个可插拔工具：时间、文件读写、目录、跨项目 RAG 检索、网页搜索、天气
+- 复用项目一 ChromaDB 知识库，跨项目共享基础设施
+- SSE 流式事件驱动（6 种事件），前端时间线可视化 Agent 完整思考链路
+- 22 条 pytest 测试，完整的错误处理和超时保护
+```
+
+### 二、面试准备：常见问题 + 回答要点
+
+#### Q1: "为什么不用 LangChain/CrewAI？"
+
+回答要点：
+1. **学习目的**: 这个项目的目标就是理解 Agent 底层原理。用 LangChain 一行代码
+   `create_react_agent()` 就完了，但面试官问你"Agent Loop 里面发生了什么"你答不上来
+2. **控制力**: 框架封装太深，出问题时不知道是模型问题还是框架 bug。
+   自己写 loop，每一行的行为完全可控
+3. **面试差异化**: 人人都会调 LangChain，但能手写 Agent Loop 的人少得多。
+   这也体现你对 LLM 工作原理的理解深度
+4. **实际体感**: 自己写 loop 代码量并不大，agent_loop.py 核心也就 150 行。
+   关键是理解流程，不是代码量
+
+#### Q2: "Agent Loop 的核心流程是什么？"
+
+回答要点：
+```
+1. 用户输入 → 拼到 messages 里
+2. 循环开始 (for step in range(max_iterations)):
+   a. 把 messages + tools schema 发给 LLM
+   b. LLM 返回 finish_reason:
+      - "stop" → 任务完成，输出最终文本，退出循环
+      - "tool_calls" → 解析工具名+参数，执行工具处理器
+   c. 工具结果追加到 messages（role: "tool"）
+   d. 继续下一轮，LLM 能看到之前的工具调用和结果
+3. 达到 max_iterations 上限 → 返回错误，防止死循环烧钱
+```
+
+关键细节要强调：
+- tool_choice 首轮 "required"、后续 "auto"（DeepSeek 踩坑经验）
+- messages 积累式设计：每轮 LLM 都能看到完整历史
+- 异常处理三层：API 调用异常、工具执行异常、未知工具
+
+#### Q3: "两个项目怎么串联的？"
+
+回答要点：
+```
+"项目一是 RAG 系统，我把它做成了一个独立的检索服务，用 MCP 协议暴露给外部 Agent 调用。
+项目二是 Agent 引擎，我把项目一的 ChromaDB 向量库当做一个检索工具（rag_search）
+注册到 Agent 的工具列表里。
+
+当用户问知识库里的问题时，Agent 自主决定调用 rag_search 工具检索文档，
+拿到结果后再决定是直接回答、还是结合其他工具进一步处理。
+
+两个项目共享同一套 ChromaDB 基础设施，形成了完整的 Agent 工具生态闭环：
+项目一提供知识，项目二负责执行和编排。"
+```
+
+#### Q4: "OpenAI SDK vs Anthropic SDK 你怎么看？为什么切了？"
+
+回答要点：
+1. 原计划用 Anthropic SDK（开发计划就是这么写的），但用户只有 DeepSeek API Key
+2. DeepSeek 兼容 OpenAI 协议，Anthropic API 不接受 sk- 格式的 key
+3. 切到 OpenAI SDK + base_url 后，同一套代码能对接 DeepSeek/千问/智谱等任意国产模型
+4. 面试价值：选 OpenAI 协议意味着不绑定厂商，面试时可以展开讲"为什么选开放协议"
+5. 两个 SDK 的 tool use 差异：system prompt 位置、arguments 格式（字符串 vs dict）、
+   finish_reason vs stop_reason、工具结果的 messages 格式
+
+#### Q5: "SSE 流式是怎么设计的？为什么用 6 种事件？"
+
+回答要点：
+1. 问题背景：原来 `/agent` 是 `return {"result": "..."}` 一把梭，
+   用户看不到 Agent 中间干了什么（调了哪个工具、结果怎样）
+2. 方案：在 Agent Loop 和表现层之间插入事件流抽象层
+   - Agent Loop 不再直接 print 或 return，而是 yield 事件对象
+   - SSE 和 Rich 终端各自消费同一套事件流
+3. 6 种事件：thinking（推理开始）、tool_call（准备调工具）、
+   tool_result（执行结果）、text（最终回答）、done（完成）、error（出错）
+4. 好处：前端能看到 Agent 每一步在干什么，不是黑盒
+
+#### Q6: "DeepSeek 踩过什么坑？"
+
+回答要点：
+1. **tool_choice 策略**: DeepSeek 在 auto 模式不主动调工具，凭记忆回答。
+   解决方案：首轮 required、后续 auto
+2. **debug 困难**: DeepSeek 有时返回的 tool arguments 是非法 JSON，
+   不做兜底会直接崩溃。加了 try/except + 回退为 {} 的处理
+3. **这不是 DeepSeek 的问题**，是国产模型普遍特点。反而说明你做的是"通用方案"
+   而非"绑定一家"——这才是面试加分项
+
+#### Q7: "容错机制怎么设计的？"
+
+回答要点：
+1. **LLM API 调用**: try/except 捕获，yield ErrorEvent，不崩溃
+2. **工具执行超时**: asyncio.wait_for(handler(**args), timeout=30s)
+3. **未知工具**: KeyError 捕获，返回"工具 XXX 不存在，可用工具：[列表]"
+4. **工具执行异常**: RuntimeError 等通用异常捕获，把错误信息返回给 LLM
+5. **JSON 解析失败**: json.loads() 的 JSONDecodeError → 回退为 {}
+6. **最大轮次保护**: for 循环 + max_iterations，防止死循环烧钱
+7. **异常捕获顺序**: asyncio.TimeoutError 必须写在 Exception 前面
+   （经典 Python 面试题）
+
+### 三、演示视频脚本（2-3 分钟）
+
+#### 场景 1：查时间 + 保存文件（30 秒）
+```
+输入：现在几点了？保存到 time.txt
+
+展示效果：
+- Step 1: get_current_time → 返回时间
+- Step 2: write_file → 写入成功
+- 最终回答：已保存
+
+面试话术："这个是最基础的 Agent 调用链，验证了工具编排和多步骤执行。"
+```
+
+#### 场景 2：搜索 + 总结 + 写报告（60 秒）
+```
+输入：搜索 Python asyncio 最佳实践，总结保存到 asyncio_guide.md
+
+展示效果：
+- Step 1: web_search("Python asyncio 最佳实践") → 5 条结果
+- Step 2: write_file("asyncio_guide.md", 总结内容) → 写入成功
+
+面试话术："Agent 自主完成了搜资料→总结→写报告的完整工作流。"
+```
+
+#### 场景 3：知识库检索 + 联网补充（60 秒）
+```
+输入：知识库里关于 RAG 的内容有哪些？再搜一下最新的 RAG 技术进展
+
+展示效果：
+- Step 1: rag_search("RAG") → 项目一知识库的文档
+- Step 2: web_search("2026 RAG 技术最新进展") → 网络搜索结果
+- 综合回答
+
+面试话术："Agent 能同时利用本地知识和实时网页信息，最终给出完整回答。"
+```
+
+### 四、简历一句话总结（面试开场用）
+
+> "我做了两个互补的 AI 项目：第一个手搓了 RAG 知识库问答系统并用 MCP 协议暴露服务，
+> 第二个进一步手搓了 Agent 引擎，让 LLM 能自主规划任务、组合 7 个工具完成复杂工作流。
+> 两个项目都不依赖 LangChain 等框架，从 SDK 裸写，理解每一步原理。"

@@ -55,7 +55,7 @@ def _init_chroma():
 
     _chroma_ready = True
     total = _collection.count()
-    print(f"  📚 RAG 工具已就绪：已连接项目一知识库，共 {total} 条文档片段")
+    print(f"  [RAG] 工具已就绪：已连接项目一知识库，共 {total} 条文档片段")
 
 
 async def rag_search(query: str, top_k: int = 3) -> str:

@@ -4,10 +4,12 @@
 文档：https://lbs.amap.com/api/webservice/guide/api/weatherinfo
 """
 
+import os
+
 import aiohttp
 
-# 高德天气 API Key
-AMAP_KEY = "38731adf1da4ebcbc45927972a8f3c16"
+# 高德天气 API Key，优先从环境变量读取
+AMAP_KEY = os.getenv("AMAP_KEY", "38731adf1da4ebcbc45927972a8f3c16")
 
 
 async def get_weather(city: str) -> str:

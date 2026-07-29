@@ -7,7 +7,6 @@
 
 import json
 import re
-import sys
 from dataclasses import fields
 
 from fastapi import FastAPI, HTTPException
@@ -121,7 +120,7 @@ async def run_agent(payload: dict):
             "6. 用户问最新信息、实时数据、或知识库中没有的内容 → 用 web_search\n"
             "7. 用户问天气 → 用 get_weather\n"
             "8. 有工具就优先用工具，不要编造信息\n"
-            "8. 拿到工具结果后，用自然语言总结给用户"
+            "9. 拿到工具结果后，用自然语言总结给用户"
         ),
         tools=tools,
         use_rich=False,  # HTTP 模式关闭 Rich，走 SSE

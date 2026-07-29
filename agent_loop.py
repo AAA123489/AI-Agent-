@@ -66,15 +66,6 @@ AgentEvent = ThinkingEvent | ToolCallEvent | ToolResultEvent | TextEvent | DoneE
 
 
 @dataclass
-class ToolResult:
-    """封装一次工具调用的结果，便于统一处理和后续回传给模型。"""
-
-    tool_name: str
-    success: bool
-    output: str
-
-
-@dataclass
 class AgentLoop:
     """Agent 核心循环 —— 基于 OpenAI 兼容 SDK（DeepSeek 等）。
 
@@ -206,54 +197,44 @@ class AgentLoop:
                     yield ToolCallEvent(tool=tool_name, args=tool_args)
 
                     # 执行注册过的工具处理器（带超时保护）。
+                    tool_output: str
+                    tool_success: bool
                     try:
                         handler = self.tools[tool_name]["handler"]
                         output = await asyncio.wait_for(
                             handler(**tool_args),
                             timeout=config.TOOL_TIMEOUT,
                         )
-                        result = ToolResult(
-                            tool_name=tool_name,
-                            success=True,
-                            output=str(output),
-                        )
+                        tool_output = str(output)
+                        tool_success = True
                     except asyncio.TimeoutError:
-                        result = ToolResult(
-                            tool_name=tool_name,
-                            success=False,
-                            output=(
-                                f"工具 '{tool_name}' 执行超时"
-                                f"（{config.TOOL_TIMEOUT}秒），已取消。"
-                            ),
+                        tool_output = (
+                            f"工具 '{tool_name}' 执行超时"
+                            f"（{config.TOOL_TIMEOUT}秒），已取消。"
                         )
+                        tool_success = False
                     except KeyError:
-                        result = ToolResult(
-                            tool_name=tool_name,
-                            success=False,
-                            output=(
-                                f"工具 '{tool_name}' 不存在。"
-                                f"可用工具：{list(self.tools.keys())}"
-                            ),
+                        tool_output = (
+                            f"工具 '{tool_name}' 不存在。"
+                            f"可用工具：{list(self.tools.keys())}"
                         )
+                        tool_success = False
                     except Exception as e:
-                        result = ToolResult(
-                            tool_name=tool_name,
-                            success=False,
-                            output=f"工具 '{tool_name}' 执行错误：{str(e)}",
-                        )
+                        tool_output = f"工具 '{tool_name}' 执行错误：{str(e)}"
+                        tool_success = False
 
                     # → 事件: 工具结果
                     yield ToolResultEvent(
                         tool=tool_name,
-                        success=result.success,
-                        output=result.output,
+                        success=tool_success,
+                        output=tool_output,
                     )
 
                     # 把工具结果组织成 OpenAI 的 tool 消息格式。
                     tool_result_messages.append({
                         "role": "tool",
                         "tool_call_id": tool_call.id,
-                        "content": result.output,
+                        "content": tool_output,
                     })
 
                 # 将所有工具执行结果追加到消息历史。

@@ -6,180 +6,276 @@
 <title>Agent 工作台 — AI 工作流引擎</title>
 <style>
 /* ══════════════════════════════════════════════════════════
-   CSS 变量 & 暗色主题（复用项目一配色）
+   CSS 变量 —— 蓝灰主色调
    ══════════════════════════════════════════════════════════ */
 :root {
-  --bg: #1a1a2e;
-  --card: #161b22;
-  --accent: #e94560;
-  --accent-hover: #ff6b81;
-  --text: #eee;
-  --text-dim: #8b949e;
-  --user-bubble: #1f2937;
-  --ai-bubble: #0d1117;
-  --input-bg: #161b22;
-  --border: #30363d;
-  --success: #3fb950;
-  --warn: #d2991d;
-  --hover: #1c2128;
+  --bg: #111827;
+  --sidebar-bg: #0c1222;
+  --sidebar-hover: #1a2740;
+  --card: #1a2236;
+  --accent: #4f8cff;
+  --accent-hover: #6ba3ff;
+  --accent-dim: rgba(79,140,255,0.12);
+  --text: #e5e7eb;
+  --text-dim: #6b7280;
+  --text-bright: #f9fafb;
+  --user-bubble: #1e3a5f;
+  --input-bg: #0f1724;
+  --border: #1f2937;
+  --border-light: #374151;
+  --success: #34d399;
+  --warn: #fbbf24;
+  --error: #f87171;
   --tool-bg: #0d1520;
   --radius: 10px;
+  --radius-sm: 6px;
+  --sidebar-width: 240px;
 
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
   color: var(--text);
   background: var(--bg);
 }
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
 
+/* ══════════════════════════════════════════════════════════
+   布局：侧栏 + 主区域
+   ══════════════════════════════════════════════════════════ */
 body {
   display: flex;
-  flex-direction: column;
   height: 100vh;
-  max-width: 860px;
-  margin: 0 auto;
   overflow: hidden;
 }
 
-/* ── 顶部导航 ───────────────────────────────────────────── */
+/* ── 侧栏 ──────────────────────────────────────────────── */
+.sidebar {
+  width: var(--sidebar-width);
+  flex-shrink: 0;
+  background: var(--sidebar-bg);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+}
+.sidebar-section {
+  padding: 12px 0;
+}
+.sidebar-label {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-dim);
+  padding: 0 16px;
+  margin-bottom: 6px;
+}
+.sidebar-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 16px;
+  font-size: 0.85rem;
+  color: var(--text-dim);
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+  border-radius: 0;
+}
+.sidebar-item:hover {
+  background: var(--sidebar-hover);
+  color: var(--text);
+}
+.sidebar-item.active {
+  color: var(--accent);
+  background: var(--accent-dim);
+}
+
+/* 工具状态灯 */
+.tool-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: var(--success);
+  opacity: 0.7;
+}
+.sidebar-item .tool-name {
+  flex: 1;
+  font-family: "SF Mono", "Fira Code", "Consolas", monospace;
+  font-size: 0.78rem;
+}
+
+/* 侧栏滚动条 */
+.sidebar::-webkit-scrollbar { width: 3px; }
+.sidebar::-webkit-scrollbar-thumb { background: var(--border-light); border-radius: 2px; }
+
+/* ── 主区域 ────────────────────────────────────────────── */
+.main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+/* ── 顶部栏 ────────────────────────────────────────────── */
 .header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 14px 20px;
+  padding: 0 20px;
+  height: 48px;
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
 }
-.header h1 { font-size: 1.15rem; font-weight: 600; }
+.header h1 {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--text-bright);
+}
 .header .badge {
-  font-size: 0.75rem;
-  background: var(--accent);
-  color: #fff;
+  font-size: 0.7rem;
+  background: var(--accent-dim);
+  color: var(--accent);
   padding: 3px 10px;
-  border-radius: 12px;
+  border-radius: 10px;
+  font-weight: 500;
 }
 
-/* ── 消息区域 ───────────────────────────────────────────── */
+/* ── 消息区域 ──────────────────────────────────────────── */
 .messages {
   flex: 1;
   overflow-y: auto;
-  padding: 16px 20px;
+  padding: 16px 24px;
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 16px;
   scroll-behavior: smooth;
 }
-/* 滚动条 */
 .messages::-webkit-scrollbar { width: 5px; }
 .messages::-webkit-scrollbar-track { background: transparent; }
-.messages::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+.messages::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
 
-/* ── 用户消息气泡 ───────────────────────────────────────── */
+/* ── 用户消息气泡 ──────────────────────────────────────── */
 .msg-user {
   align-self: flex-end;
-  max-width: 75%;
+  max-width: 70%;
   background: var(--user-bubble);
-  border-radius: var(--radius);
+  border-radius: 12px;
   border-bottom-right-radius: 4px;
-  padding: 10px 14px;
+  padding: 10px 16px;
   animation: fadeIn 0.25s ease;
   line-height: 1.55;
   white-space: pre-wrap;
   word-break: break-word;
+  font-size: 0.9rem;
 }
 
-/* ── Agent 消息容器 ─────────────────────────────────────── */
+/* ── Agent 消息容器 ────────────────────────────────────── */
 .agent-block {
   align-self: flex-start;
   width: 100%;
   animation: fadeIn 0.3s ease;
 }
 
-/* ── Round 卡片（每轮思考） ─────────────────────────────── */
-.round-card {
+/* ── 时间线 ────────────────────────────────────────────── */
+.timeline {
+  position: relative;
+  padding-left: 28px;
+  margin: 4px 0 10px;
+}
+.timeline::before {
+  content: '';
+  position: absolute;
+  left: 8px;
+  top: 8px;
+  bottom: 8px;
+  width: 2px;
+  background: var(--border);
+  border-radius: 1px;
+}
+
+.timeline-step {
+  position: relative;
+  padding: 8px 0;
+  animation: fadeIn 0.3s ease;
+}
+.timeline-step::before {
+  content: '';
+  position: absolute;
+  left: -20px;
+  top: 12px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--border);
+  border: 2px solid var(--bg);
+  z-index: 1;
+  transition: background 0.2s;
+}
+.timeline-step.running::before { background: var(--accent); box-shadow: 0 0 0 3px var(--accent-dim); }
+.timeline-step.done::before    { background: var(--success); }
+.timeline-step.errored::before { background: var(--error); }
+
+.timeline-step .step-header {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 2px;
+}
+.timeline-step .step-detail {
+  font-size: 0.8rem;
+  padding: 3px 0 3px 10px;
+  margin-top: 2px;
+  border-left: 2px solid var(--border);
+  line-height: 1.45;
+}
+.step-detail .tool-icon { margin-right: 4px; }
+.step-detail .tool-icon.call  { color: var(--warn); }
+.step-detail .tool-icon.ok    { color: var(--success); }
+.step-detail .tool-icon.fail  { color: var(--error); }
+.step-detail .tool-fn {
+  color: var(--accent);
+  font-family: "SF Mono", "Fira Code", "Consolas", monospace;
+  font-size: 0.78rem;
+}
+.step-detail .tool-preview {
+  color: var(--text-dim);
+  font-size: 0.78rem;
+}
+
+/* ── 最终回答卡片 ──────────────────────────────────────── */
+.final-answer {
   background: var(--card);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  margin-bottom: 8px;
-  overflow: hidden;
-}
-.round-header {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 14px;
-  cursor: pointer;
-  user-select: none;
-  font-size: 0.85rem;
-  color: var(--text-dim);
-  transition: background 0.15s;
-}
-.round-header:hover { background: var(--hover); }
-.round-header .arrow {
-  font-size: 0.65rem;
-  transition: transform 0.2s;
-  color: var(--text-dim);
-}
-.round-card.collapsed .arrow { transform: rotate(-90deg); }
-.round-card.collapsed .round-body { display: none; }
-.round-header .label { font-weight: 600; color: var(--text); }
-.round-header .tool-list { margin-left: auto; font-size: 0.78rem; }
-
-.round-body { padding: 4px 14px 10px; }
-
-/* ── 工具调用行 ─────────────────────────────────────────── */
-.tool-line {
-  display: flex;
-  align-items: flex-start;
-  gap: 6px;
-  padding: 4px 0;
-  font-size: 0.83rem;
-  line-height: 1.5;
-}
-.tool-line .icon { flex-shrink: 0; width: 18px; text-align: center; }
-.tool-line .icon.call { color: var(--warn); }
-.tool-line .icon.ok { color: var(--success); }
-.tool-line .icon.fail { color: var(--accent); }
-.tool-line code {
-  background: var(--tool-bg);
-  padding: 1px 6px;
-  border-radius: 4px;
-  font-size: 0.8rem;
-  color: #79c0ff;
-  word-break: break-all;
-}
-.tool-line .result-text {
-  color: var(--text-dim);
-  font-size: 0.8rem;
-  max-width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-/* ── 最终回答 ───────────────────────────────────────────── */
-.final-answer {
-  background: var(--ai-bubble);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  border-bottom-left-radius: 4px;
-  padding: 10px 14px;
+  padding: 12px 16px;
   line-height: 1.6;
   white-space: pre-wrap;
   word-break: break-word;
-  font-size: 0.9rem;
+  font-size: 0.88rem;
+  margin-top: 2px;
+}
+.final-answer::before {
+  content: '回答';
+  display: block;
+  font-size: 0.7rem;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: 6px;
 }
 
-/* ── 输入区 ─────────────────────────────────────────────── */
+/* ── 输入区 ────────────────────────────────────────────── */
 .input-area {
-  display: flex;
-  gap: 10px;
-  padding: 12px 20px 16px;
+  padding: 12px 24px 16px;
   border-top: 1px solid var(--border);
   flex-shrink: 0;
   background: var(--bg);
 }
-.input-area textarea {
+.input-row {
+  display: flex;
+  gap: 10px;
+  align-items: flex-end;
+}
+.input-row textarea {
   flex: 1;
   resize: none;
   background: var(--input-bg);
@@ -187,38 +283,104 @@ body {
   border-radius: var(--radius);
   color: var(--text);
   padding: 10px 14px;
-  font-size: 0.9rem;
+  font-size: 0.88rem;
   font-family: inherit;
   line-height: 1.5;
   min-height: 44px;
   max-height: 120px;
-  transition: border-color 0.2s;
+  transition: border-color 0.15s;
 }
-.input-area textarea:focus {
+.input-row textarea:focus {
   outline: none;
   border-color: var(--accent);
 }
-.input-area button {
+.input-row button {
   flex-shrink: 0;
   background: var(--accent);
   color: #fff;
   border: none;
   border-radius: var(--radius);
-  padding: 0 20px;
-  font-size: 0.9rem;
+  padding: 10px 22px;
+  font-size: 0.88rem;
   font-weight: 600;
   cursor: pointer;
   transition: opacity 0.15s, transform 0.1s;
+  height: 44px;
 }
-.input-area button:hover { opacity: 0.9; }
-.input-area button:active { transform: scale(0.96); }
-.input-area button:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-  transform: none;
+.input-row button:hover { opacity: 0.88; }
+.input-row button:active { transform: scale(0.96); }
+.input-row button:disabled { opacity: 0.45; cursor: not-allowed; transform: none; }
+
+/* ── 工具快捷标签 ──────────────────────────────────────── */
+.tool-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+}
+.tool-tag {
+  font-size: 0.7rem;
+  font-family: "SF Mono", "Fira Code", "Consolas", monospace;
+  color: var(--text-dim);
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 3px 10px;
+  cursor: pointer;
+  transition: all 0.12s;
+  white-space: nowrap;
+}
+.tool-tag:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+  background: var(--accent-dim);
 }
 
-/* ── 加载动画 ───────────────────────────────────────────── */
+/* ── 错误卡片 ──────────────────────────────────────────── */
+.error-card {
+  background: rgba(248,113,113,0.1);
+  border: 1px solid var(--error);
+  border-radius: var(--radius);
+  padding: 10px 14px;
+  color: var(--error);
+  font-size: 0.83rem;
+}
+
+/* ── 欢迎区域 ──────────────────────────────────────────── */
+.welcome {
+  text-align: center;
+  color: var(--text-dim);
+  padding: 48px 20px;
+  line-height: 2;
+}
+.welcome .title {
+  font-size: 1.2rem;
+  font-weight: 600;
+  color: var(--text-bright);
+  margin-bottom: 4px;
+}
+.welcome .hint {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: center;
+  margin-top: 12px;
+}
+.welcome .hint span {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 5px 14px;
+  font-size: 0.8rem;
+  cursor: pointer;
+  transition: border-color 0.12s;
+}
+.welcome .hint span:hover {
+  border-color: var(--accent);
+  color: var(--text);
+}
+
+/* ── 加载动画 ──────────────────────────────────────────── */
 .spinner {
   display: inline-block;
   width: 14px; height: 14px;
@@ -227,7 +389,7 @@ body {
   border-radius: 50%;
   animation: spin 0.6s linear infinite;
   vertical-align: middle;
-  margin-right: 6px;
+  margin-right: 8px;
 }
 @keyframes spin { to { transform: rotate(360deg); } }
 @keyframes fadeIn {
@@ -235,57 +397,86 @@ body {
   to   { opacity: 1; transform: translateY(0); }
 }
 
-/* ── 欢迎提示 ───────────────────────────────────────────── */
-.welcome {
-  text-align: center;
-  color: var(--text-dim);
-  padding: 40px 20px;
-  font-size: 0.9rem;
-  line-height: 1.8;
-}
-.welcome b { color: var(--accent); }
-
-/* ── 错误提示 ───────────────────────────────────────────── */
-.error-card {
-  background: #2d1520;
-  border: 1px solid var(--accent);
-  border-radius: var(--radius);
-  padding: 10px 14px;
-  color: var(--accent);
-  font-size: 0.85rem;
+/* ── 响应式：窄屏隐藏侧栏 ─────────────────────────────── */
+@media (max-width: 700px) {
+  .sidebar { display: none; }
+  .messages { padding: 12px 14px; }
+  .input-area { padding: 10px 14px 14px; }
+  .msg-user { max-width: 85%; }
 }
 </style>
 </head>
 <body>
 
-<!-- ═══════════════════ 顶部 ═══════════════════ -->
-<div class="header">
-  <h1>🤖 Agent 工作台</h1>
-  <span class="badge">7 Tools · SSE 流式</span>
-</div>
-
-<!-- ═══════════════════ 消息区 ═══════════════════ -->
-<div class="messages" id="messages">
-  <div class="welcome">
-    👋 试试这些任务：<br><br>
-    <b>「现在几点了？保存到 time.txt」</b><br>
-    <b>「搜索 Python asyncio，总结保存到文件」</b><br>
-    <b>「北京今天天气怎么样？」</b><br>
-    <b>「知识库里有哪些内容？」</b>
+<!-- ═══════════════════ 侧栏 ═══════════════════ -->
+<aside class="sidebar">
+  <div class="sidebar-section">
+    <div class="sidebar-label">导航</div>
+    <div class="sidebar-item active">
+      <span>&#9679;</span> Agent 工作台
+    </div>
   </div>
-</div>
 
-<!-- ═══════════════════ 输入区 ═══════════════════ -->
-<div class="input-area">
-  <textarea id="input" rows="1"
-    placeholder="输入任务，Enter 发送，Shift+Enter 换行"
-    onkeydown="handleKey(event)"></textarea>
-  <button id="sendBtn" onclick="send()">发送</button>
+  <div class="sidebar-section">
+    <div class="sidebar-label">工具 (7)</div>
+    <div class="sidebar-item"><span class="tool-dot"></span><span class="tool-name">get_current_time</span></div>
+    <div class="sidebar-item"><span class="tool-dot"></span><span class="tool-name">write_file</span></div>
+    <div class="sidebar-item"><span class="tool-dot"></span><span class="tool-name">read_file</span></div>
+    <div class="sidebar-item"><span class="tool-dot"></span><span class="tool-name">list_files</span></div>
+    <div class="sidebar-item"><span class="tool-dot"></span><span class="tool-name">rag_search</span></div>
+    <div class="sidebar-item"><span class="tool-dot"></span><span class="tool-name">web_search</span></div>
+    <div class="sidebar-item"><span class="tool-dot"></span><span class="tool-name">get_weather</span></div>
+  </div>
+</aside>
+
+<!-- ═══════════════════ 主区域 ═══════════════════ -->
+<div class="main">
+
+  <!-- 顶部 -->
+  <div class="header">
+    <h1>Agent 工作台</h1>
+    <span class="badge">7 工具 &#183; SSE 流式</span>
+  </div>
+
+  <!-- 消息区 -->
+  <div class="messages" id="messages">
+    <div class="welcome">
+      <div class="title">AI Agent 工作流引擎</div>
+      <p>试试这些任务：</p>
+      <div class="hint">
+        <span onclick="setInput('现在几点了？保存到 time.txt')">查时间并保存</span>
+        <span onclick="setInput('搜索 Python asyncio，总结保存到文件')">搜索并总结</span>
+        <span onclick="setInput('北京今天天气怎么样？')">查天气</span>
+        <span onclick="setInput('知识库里有哪些内容？')">搜知识库</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- 输入区 -->
+  <div class="input-area">
+    <div class="input-row">
+      <textarea id="input" rows="1"
+        placeholder="输入任务，Enter 发送，Shift+Enter 换行..."
+        onkeydown="handleKey(event)"
+        oninput="autoResize(this)"></textarea>
+      <button id="sendBtn" onclick="send()">发送</button>
+    </div>
+    <div class="tool-tags" id="toolTags">
+      <span class="tool-tag" data-tool="get_current_time">get_current_time</span>
+      <span class="tool-tag" data-tool="write_file">write_file</span>
+      <span class="tool-tag" data-tool="read_file">read_file</span>
+      <span class="tool-tag" data-tool="list_files">list_files</span>
+      <span class="tool-tag" data-tool="rag_search">rag_search</span>
+      <span class="tool-tag" data-tool="web_search">web_search</span>
+      <span class="tool-tag" data-tool="get_weather">get_weather</span>
+    </div>
+  </div>
+
 </div>
 
 <script>
 /* ═══════════════════════════════════════════════════════════
-   SSE 消费 + UI 渲染
+   SSE 消费 + 时间线 UI 渲染
    ═══════════════════════════════════════════════════════════ */
 
 const messagesEl = document.getElementById('messages');
@@ -293,11 +484,12 @@ const inputEl   = document.getElementById('input');
 const sendBtn   = document.getElementById('sendBtn');
 
 let isStreaming = false;
-let currentAgentBlock = null;   // 当前 agent-block DOM
-let currentRound     = null;   // 当前 round-card DOM
-let currentRoundBody = null;   // 当前 round-card 的 body DOM
+let currentAgentBlock = null;
+let currentTimeline   = null;
+let currentStep       = null;
 
 // ── 工具函数 ──────────────────────────────────────────────
+
 function escHtml(s) {
   const div = document.createElement('div');
   div.textContent = s;
@@ -312,6 +504,28 @@ function clearWelcome() {
   const w = messagesEl.querySelector('.welcome');
   if (w) w.remove();
 }
+
+function autoResize(el) {
+  el.style.height = 'auto';
+  el.style.height = Math.min(el.scrollHeight, 120) + 'px';
+}
+
+// ── 设置输入框内容 ────────────────────────────────────────
+function setInput(text) {
+  inputEl.value = text;
+  inputEl.focus();
+  autoResize(inputEl);
+}
+
+// ── 工具标签点击 ──────────────────────────────────────────
+document.getElementById('toolTags').addEventListener('click', function(e) {
+  if (e.target.classList.contains('tool-tag')) {
+    const tool = e.target.dataset.tool;
+    inputEl.value = inputEl.value ? inputEl.value + ' ' + tool : tool;
+    inputEl.focus();
+    autoResize(inputEl);
+  }
+});
 
 // ── 键盘处理 ──────────────────────────────────────────────
 function handleKey(e) {
@@ -332,22 +546,22 @@ async function send() {
   sendBtn.disabled = true;
   clearWelcome();
 
-  // 1. 渲染用户消息气泡
+  // 用户消息气泡
   const userDiv = document.createElement('div');
   userDiv.className = 'msg-user';
   userDiv.textContent = msg;
   messagesEl.appendChild(userDiv);
   scrollBottom();
 
-  // 2. 创建 Agent 消息块
+  // Agent 消息块
   currentAgentBlock = document.createElement('div');
   currentAgentBlock.className = 'agent-block';
   messagesEl.appendChild(currentAgentBlock);
 
-  // 3. 显示加载指示器
+  // 加载指示器
   const loading = document.createElement('div');
-  loading.className = 'round-card';
-  loading.innerHTML = `<div class="round-header"><span class="spinner"></span> Agent 思考中...</div>`;
+  loading.style.cssText = 'padding:8px 0;color:var(--text-dim);font-size:0.85rem;';
+  loading.innerHTML = '<span class="spinner"></span> 思考中...';
   currentAgentBlock.appendChild(loading);
   scrollBottom();
 
@@ -359,17 +573,14 @@ async function send() {
     });
 
     if (!resp.ok) {
-      const errText = await resp.text();
-      // 移除加载指示器
       loading.remove();
-      showError('服务器错误: ' + escHtml(errText));
+      showError('服务器错误: ' + resp.status);
       return;
     }
 
-    // 移除加载指示器
     loading.remove();
 
-    // 4. SSE 流解析（同项目一：fetch + reader）
+    // SSE 流解析
     const reader = resp.body.getReader();
     const decoder = new TextDecoder();
     let buffer = '';
@@ -379,28 +590,22 @@ async function send() {
       if (done) break;
 
       buffer += decoder.decode(value, { stream: true });
-
-      // SSE 事件以 \n\n 分隔
       const parts = buffer.split('\n\n');
-      buffer = parts.pop();  // 最后一段可能不完整，留着下次拼接
+      buffer = parts.pop();
 
       for (const part of parts) {
         const line = part.trim();
         if (!line.startsWith('data: ')) continue;
-
-        const payload = line.slice(6);  // 去掉 "data: " 前缀
+        const payload = line.slice(6);
         if (payload === '[DONE]') continue;
 
         try {
-          const event = JSON.parse(payload);
-          handleEvent(event);
-        } catch (_) {
-          // 非 JSON 内容忽略
-        }
+          handleEvent(JSON.parse(payload));
+        } catch (_) { /* ignore */ }
       }
     }
 
-    // 处理 buffer 中残留的最后一条
+    // 处理残留
     if (buffer.trim().startsWith('data: ')) {
       const payload = buffer.trim().slice(6);
       if (payload && payload !== '[DONE]') {
@@ -409,77 +614,94 @@ async function send() {
     }
 
   } catch (err) {
-    // 网络异常
-    showError('网络错误: ' + escHtml(err.message));
+    showError('网络错误: ' + err.message);
   } finally {
     isStreaming = false;
     sendBtn.disabled = false;
     inputEl.focus();
     currentAgentBlock = null;
-    currentRound = null;
-    currentRoundBody = null;
+    currentTimeline = null;
+    currentStep = null;
   }
 }
 
-// ── 事件处理器 ────────────────────────────────────────────
+// ── 事件处理 ──────────────────────────────────────────────
 function handleEvent(event) {
   switch (event.type) {
 
-    // ═══ thinking: 新 Round 开始 ═══
+    // ═══ thinking: 新步骤开始 ═══
     case 'thinking': {
-      currentRound = document.createElement('div');
-      currentRound.className = 'round-card';
+      // 首次创建时间线容器
+      if (!currentTimeline) {
+        currentTimeline = document.createElement('div');
+        currentTimeline.className = 'timeline';
+        currentAgentBlock.appendChild(currentTimeline);
+      }
+
+      // 上一步标记为完成
+      if (currentStep) {
+        currentStep.classList.remove('running');
+        currentStep.classList.add('done');
+      }
+
+      // 创建新的时间线步骤
+      currentStep = document.createElement('div');
+      currentStep.className = 'timeline-step running';
 
       const toolsStr = (event.tools && event.tools.length)
-        ? event.tools.join(', ')
-        : '';
+        ? event.tools.length + ' 个工具'
+        : '无工具';
 
-      currentRound.innerHTML =
-        `<div class="round-header" onclick="this.parentElement.classList.toggle('collapsed')">` +
-        `<span class="arrow">&#9660;</span>` +
-        `<span class="label">Round ${event.step}/${event.max_steps}</span>` +
-        (toolsStr ? `<span class="tool-list">可用: ${escHtml(toolsStr)}</span>` : '') +
-        `</div>` +
-        `<div class="round-body"></div>`;
+      currentStep.innerHTML =
+        '<div class="step-header">步骤 ' + event.step + '/' + event.max_steps +
+        ' <span style="font-weight:400;color:var(--text-dim);font-size:0.78rem;">' +
+        escHtml(toolsStr) + '</span></div>';
 
-      currentRoundBody = currentRound.querySelector('.round-body');
-      currentAgentBlock.appendChild(currentRound);
+      currentTimeline.appendChild(currentStep);
       scrollBottom();
       break;
     }
 
     // ═══ tool_call: 工具调用 ═══
     case 'tool_call': {
-      if (!currentRoundBody) break;
+      if (!currentStep) break;
       const argsStr = JSON.stringify(event.args);
-      const line = document.createElement('div');
-      line.className = 'tool-line';
-      line.innerHTML =
-        `<span class="icon call">&#9654;</span>` +
-        `<span><b>${escHtml(event.tool)}</b>` +
-        `<code>${escHtml(argsStr.length > 80 ? argsStr.slice(0,80) + '...' : argsStr)}</code></span>`;
-      currentRoundBody.appendChild(line);
+      const truncated = argsStr.length > 90 ? argsStr.slice(0, 90) + '...' : argsStr;
+      const detail = document.createElement('div');
+      detail.className = 'step-detail';
+      detail.innerHTML =
+        '<span class="tool-icon call">&#9654;</span>' +
+        '<span class="tool-fn">' + escHtml(event.tool) + '</span>' +
+        ' <span style="color:var(--text-dim);font-size:0.76rem;">' + escHtml(truncated) + '</span>';
+      currentStep.appendChild(detail);
       scrollBottom();
       break;
     }
 
     // ═══ tool_result: 工具结果 ═══
     case 'tool_result': {
-      if (!currentRoundBody) break;
+      if (!currentStep) break;
       const ok = event.success;
-      const preview = (event.output || '').slice(0, 120);
-      const line = document.createElement('div');
-      line.className = 'tool-line';
-      line.innerHTML =
-        `<span class="icon ${ok ? 'ok' : 'fail'}">${ok ? '&#10004;' : '&#10008;'}</span>` +
-        `<span class="result-text" title="${escHtml(event.output || '')}">${escHtml(preview)}</span>`;
-      currentRoundBody.appendChild(line);
+      const preview = (event.output || '').slice(0, 150);
+      const detail = document.createElement('div');
+      detail.className = 'step-detail';
+      detail.innerHTML =
+        '<span class="tool-icon ' + (ok ? 'ok' : 'fail') + '">' +
+        (ok ? '&#10004;' : '&#10008;') + '</span>' +
+        '<span class="tool-preview">' + escHtml(preview) + '</span>';
+      currentStep.appendChild(detail);
       scrollBottom();
       break;
     }
 
     // ═══ text: 最终回答 ═══
     case 'text': {
+      // 标记最后一步
+      if (currentStep) {
+        currentStep.classList.remove('running');
+        currentStep.classList.add('done');
+      }
+
       const answerDiv = document.createElement('div');
       answerDiv.className = 'final-answer';
       answerDiv.textContent = event.content;
@@ -490,11 +712,18 @@ function handleEvent(event) {
 
     // ═══ done: 完成 ═══
     case 'done':
-      // 流正常结束，无需额外操作
+      if (currentStep) {
+        currentStep.classList.remove('running');
+        currentStep.classList.add('done');
+      }
       break;
 
     // ═══ error: 出错 ═══
     case 'error': {
+      if (currentStep) {
+        currentStep.classList.remove('running');
+        currentStep.classList.add('errored');
+      }
       showError(event.message);
       break;
     }
@@ -504,7 +733,7 @@ function handleEvent(event) {
 function showError(msg) {
   const div = document.createElement('div');
   div.className = 'error-card';
-  div.textContent = 'Error: ' + msg;
+  div.textContent = '错误: ' + msg;
   messagesEl.appendChild(div);
   scrollBottom();
 }
