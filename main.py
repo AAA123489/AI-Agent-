@@ -18,6 +18,7 @@ from openai import AsyncOpenAI
 
 from config import config
 from agent_loop import AgentLoop
+from prompts import SYSTEM_PROMPT
 from tools.get_time import get_current_time, TOOL_SCHEMA
 from tools.file_tools import (
     write_file, WRITE_FILE_SCHEMA,
@@ -109,19 +110,7 @@ async def run_agent(payload: dict):
 
     agent = AgentLoop(
         llm_client=client,
-        system_prompt=(
-            "你是一个智能助手，有一组工具可以帮助你完成任务。\n\n"
-            "工具使用规则：\n"
-            "1. 用户问时间/日期 → 必须用 get_current_time，不能凭记忆回答\n"
-            "2. 用户要保存内容到文件 → 用 write_file\n"
-            "3. 用户要读取文件内容 → 用 read_file\n"
-            "4. 用户要查看目录结构/有哪些文件 → 用 list_files\n"
-            "5. 用户问知识库里的内容、文档资料、某个主题 → 先用 rag_search 搜索\n"
-            "6. 用户问最新信息、实时数据、或知识库中没有的内容 → 用 web_search\n"
-            "7. 用户问天气 → 用 get_weather\n"
-            "8. 有工具就优先用工具，不要编造信息\n"
-            "9. 拿到工具结果后，用自然语言总结给用户"
-        ),
+        system_prompt=SYSTEM_PROMPT,
         tools=tools,
         use_rich=False,  # HTTP 模式关闭 Rich，走 SSE
     )
